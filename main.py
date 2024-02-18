@@ -38,13 +38,34 @@ def draw_matches(im_A, kpts_A, im_B, kpts_B):
     ret = cv2.drawMatches(im_A, kpts_A, im_B, kpts_B, matches_A_to_B, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     return ret
 
+def findH(kpts_A, kpts_B):
+    # matches
+
+    pts0 = kpts_A.reshape(-1,1,2)
+    pts1 = kpts_B.reshape(-1,1,2)
+
+    _M, mask = cv2.findHomography(pts0, pts1, cv2.RANSAC, 5.0)
+    return _M
+
 if __name__ == "__main__":
-    img_paths = ["images/origin.jpeg", "images/temple.jpeg"]
+    img_paths = ["images/temple.jpeg", "images/origin.jpeg"]
     mynet = DeDoDeRunner_end2end('weights/dedode_end2end_1024_fp16.onnx', fp16=True)
 
     image_a, image_b = cv2.imread(img_paths[0]), cv2.imread(img_paths[1])
     matches_a, matches_b = mynet.detect(image_a, image_b)
 
+    M = findH(matches_a, matches_b)
+
+    TestPt = np.float32([[272,208], [272, 268], [297, 267], [296, 222], [353, 183], [353, 245], [380, 239], [384, 152]])
+    TestPt2 = list()
+
+    image_a = cv2.fillPoly(image_a, [np.array(TestPt,dtype=np.int32)], 255)
+    pts = np.float32(TestPt).reshape(-1,2).reshape(-1,1,2)
+    dst = cv2.perspectiveTransform(pts, M)#.reshape(1, -1).reshape(-1,2)
+    dst = np.int32(dst)
+    for point in dst:
+        TestPt2.append(point)
+    image_b = cv2.fillPoly(image_b, [np.array(TestPt2,dtype=np.int32)], 255)
     # match_img = np.hstack((image_a, image_b)) ###直接把两幅输入原图拼在一起,然后在点集里从0开始连线，是不行的。因为两幅输入原图的高宽并不是完全相同的，这就使得在两幅图里检测到的点集个数也可能不相等。因此不能直接连线的，要使用DMatch建立两个点集里的点间对应关系
     # w = image_a.shape[1]
     # for i in range(matches_a.shape[0]):
@@ -54,5 +75,6 @@ if __name__ == "__main__":
     print('image_a.shape =',image_a.shape, 'image_b.shape =',image_b.shape, 'match_img.shape =',match_img.shape)
     cv2.namedWindow('Image matches use onnxrunime', cv2.WINDOW_NORMAL)
     cv2.imshow("Image matches use onnxrunime", match_img)
+    cv2.imwrite("result.jpg",match_img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
